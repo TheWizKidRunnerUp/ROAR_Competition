@@ -59,6 +59,8 @@ class RoarCompetitionSolution:
             self.maneuverable_waypoints
         )
         self.straight_ticks = 0
+        self.straight_ticks = 0
+        self.s_turn_ticks = 0
 
 
     async def step(
@@ -104,6 +106,33 @@ class RoarCompetitionSolution:
         steer_control = np.clip(steer_control, -1.0, 1.0)
 
        
+
+        waypoints = self.maneuverable_waypoints
+        n = len(waypoints)
+        i = self.current_waypoint_idx
+        segment = 30 
+
+        p0 = waypoints[i % n].location[:2]
+        p1 = waypoints[(i + segment) % n].location[:2]
+        p2 = waypoints[(i + 2 * segment) % n].location[:2]
+        p3 = waypoints[(i + 3 * segment) % n].location[:2]
+
+        heading1 = np.arctan2(p1[1] - p0[1], p1[0] - p0[0])
+        heading2 = np.arctan2(p2[1] - p1[1], p2[0] - p1[0])
+        heading3 = np.arctan2(p3[1] - p2[1], p3[0] - p2[0])
+
+        turn1 = normalize_rad(heading2 - heading1)
+        turn2 = normalize_rad(heading3 - heading2)
+
+        is_s_turn = (
+            turn1 * turn2 < 0            
+            and abs(turn1) > 0.10
+            and abs(turn2) > 0.10
+        )
+
+
+
+
         # Close-range corner detection
         waypoint_to_follow_close = self.maneuverable_waypoints[(self.current_waypoint_idx + 6) % len(self.maneuverable_waypoints)]
 
@@ -123,7 +152,7 @@ class RoarCompetitionSolution:
             target_speed = high_speed_threshold
 
         # Very long-distance corner detection
-        long_lookahead_far = 120
+        long_lookahead_far = 100
 
         waypoint_to_follow_far = self.maneuverable_waypoints[
             (self.current_waypoint_idx + long_lookahead_far)
@@ -144,12 +173,15 @@ class RoarCompetitionSolution:
         )
         self.delta_heading_far = delta_heading_far
 
-        if abs(delta_heading_far) > 0.35:
+        if abs(delta_heading_far) > 0.4:
             target_speed = min(target_speed, low_speed_threshold)
-        elif abs(delta_heading_far) > 0.04:
+        elif abs(delta_heading_far) > 0.06:
             target_speed = min(target_speed, middle_speed_threshold)
 
-        if target_speed <= low_speed_threshold:
+
+        if self.s_turn_ticks > 0:
+            self.speed_mode = "special-med"
+        elif target_speed <= low_speed_threshold:
             self.speed_mode = "low"
         elif target_speed <= middle_speed_threshold:
             self.speed_mode = "middle"
@@ -157,18 +189,18 @@ class RoarCompetitionSolution:
             self.speed_mode = "high"
 
 
-        is_straight = (abs(delta_heading_close) < 0.015) and (abs(delta_heading_far) < 0.04)
+        
      
-        if is_straight:
-            self.straight_ticks += 1
-        else:
-            self.straight_ticks = 0
-        if self.straight_ticks >= 50:
-            target_speed = 40   # confirmed long straight
-            self.speed_mode = "special-high"
+        if is_s_turn:
+            self.s_turn_ticks = 80
+        elif self.s_turn_ticks > 0:
+            self.s_turn_ticks -= 1
+
+        if self.s_turn_ticks > 0:
+            target_speed = min(target_speed, 35)
        
 
-        throttle_control = 0.15 * (target_speed - vehicle_velocity_norm)
+        throttle_control = 0.05 * (target_speed - vehicle_velocity_norm)
 
         control = {
             "throttle": np.clip(throttle_control, 0.0, 1.0),
