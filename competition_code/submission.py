@@ -143,9 +143,9 @@ class RoarCompetitionSolution:
         delta_heading_close = normalize_rad(heading_to_waypoint_close - vehicle_rotation[2])
         self.delta_heading_close = delta_heading_close
 
-        high_speed_threshold = 140
-        middle_speed_threshold = 90
-        low_speed_threshold = 50
+        high_speed_threshold = 150
+        middle_speed_threshold = 100
+        low_speed_threshold = 55
         if abs(delta_heading_close) > 0.08:
             target_speed = low_speed_threshold
         elif abs(delta_heading_close) > 0.025:
@@ -199,7 +199,7 @@ class RoarCompetitionSolution:
             self.s_turn_ticks -= 1
 
         if self.s_turn_ticks > 0:
-            target_speed = min(target_speed, 35)
+            target_speed = min(target_speed, 40)
        
 
         throttle_control = 0.05 * (target_speed - vehicle_velocity_norm)
