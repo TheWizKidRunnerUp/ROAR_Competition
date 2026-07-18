@@ -144,8 +144,8 @@ class RoarCompetitionSolution:
         self.delta_heading_close = delta_heading_close
 
         high_speed_threshold = 140
-        middle_speed_threshold = 80
-        low_speed_threshold = 45
+        middle_speed_threshold = 90
+        low_speed_threshold = 50
         if abs(delta_heading_close) > 0.08:
             target_speed = low_speed_threshold
         elif abs(delta_heading_close) > 0.025:
