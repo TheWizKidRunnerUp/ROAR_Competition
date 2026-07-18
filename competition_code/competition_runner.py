@@ -77,7 +77,6 @@ class RoarCompetitionRule:
         
         self.furthest_waypoints_index += min_index #= new_furthest_index
         self._last_vehicle_location = current_location
-        print(f"reach waypoints {self.furthest_waypoints_index} at {self.waypoints[self.furthest_waypoints_index].location}")
 
     
     async def respawn(
@@ -212,6 +211,8 @@ async def evaluate_solution(
                 return None
 
         await solution.step()
+        vehicle_speed = np.linalg.norm(velocity_sensor.get_last_gym_observation())
+        print(f"speed={vehicle_speed:6.2f} m/s | mode={solution.speed_mode:12} | reach waypoints {rule.furthest_waypoints_index} at {rule.waypoints[rule.furthest_waypoints_index].location}")
         await world.step()
     
     print("end of the loop")

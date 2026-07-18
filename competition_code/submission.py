@@ -50,12 +50,15 @@ class RoarCompetitionSolution:
         vehicle_rotation = self.rpy_sensor.get_last_gym_observation()
         vehicle_velocity = self.velocity_sensor.get_last_gym_observation()
 
+
+
         self.current_waypoint_idx = 10
         self.current_waypoint_idx = filter_waypoints(
             vehicle_location,
             self.current_waypoint_idx,
             self.maneuverable_waypoints
         )
+        self.straight_ticks = 0
 
 
     async def step(
@@ -73,6 +76,8 @@ class RoarCompetitionSolution:
         vehicle_rotation = self.rpy_sensor.get_last_gym_observation()
         vehicle_velocity = self.velocity_sensor.get_last_gym_observation()
         vehicle_velocity_norm = np.linalg.norm(vehicle_velocity)
+
+        
         
         # Find the waypoint closest to the vehicle
         self.current_waypoint_idx = filter_waypoints(
@@ -81,7 +86,8 @@ class RoarCompetitionSolution:
             self.maneuverable_waypoints
         )
          # We use the 3rd waypoint ahead of the current waypoint as the target waypoint
-        waypoint_to_follow = self.maneuverable_waypoints[(self.current_waypoint_idx + 3) % len(self.maneuverable_waypoints)]
+        lookahead_distance = int(3+vehicle_velocity_norm*0.3)
+        waypoint_to_follow = self.maneuverable_waypoints[(self.current_waypoint_idx + lookahead_distance) % len(self.maneuverable_waypoints)]
 
         # Calculate delta vector towards the target waypoint
         vector_to_waypoint = (waypoint_to_follow.location - vehicle_location)[:2]
@@ -89,15 +95,80 @@ class RoarCompetitionSolution:
 
         # Calculate delta angle towards the target waypoint
         delta_heading = normalize_rad(heading_to_waypoint - vehicle_rotation[2])
+        self.delta_heading = delta_heading
 
         # Proportional controller to steer the vehicle towards the target waypoint
         steer_control = (
-            -8.0 / np.sqrt(vehicle_velocity_norm) * delta_heading / np.pi
+            -16.0 / np.sqrt(vehicle_velocity_norm) * delta_heading / np.pi
         ) if vehicle_velocity_norm > 1e-2 else -np.sign(delta_heading)
         steer_control = np.clip(steer_control, -1.0, 1.0)
 
-        # Proportional controller to control the vehicle's speed towards 40 m/s
-        throttle_control = 0.05 * (20 - vehicle_velocity_norm)
+       
+        # Close-range corner detection
+        waypoint_to_follow_close = self.maneuverable_waypoints[(self.current_waypoint_idx + 6) % len(self.maneuverable_waypoints)]
+
+        vector_to_waypoint_close = (waypoint_to_follow_close.location - vehicle_location)[:2]
+        heading_to_waypoint_close = np.arctan2(vector_to_waypoint_close[1],vector_to_waypoint_close[0])
+        delta_heading_close = normalize_rad(heading_to_waypoint_close - vehicle_rotation[2])
+        self.delta_heading_close = delta_heading_close
+
+        high_speed_threshold = 85
+        middle_speed_threshold = 50
+        low_speed_threshold = 35
+        if abs(delta_heading_close) > 0.08:
+            target_speed = low_speed_threshold
+        elif abs(delta_heading_close) > 0.025:
+            target_speed = middle_speed_threshold
+        else:
+            target_speed = high_speed_threshold
+
+        # Very long-distance corner detection
+        long_lookahead_far = 120
+
+        waypoint_to_follow_far = self.maneuverable_waypoints[
+            (self.current_waypoint_idx + long_lookahead_far)
+            % len(self.maneuverable_waypoints)
+        ]
+
+        vector_to_waypoint_far = (
+            waypoint_to_follow_far.location - vehicle_location
+        )[:2]
+
+        heading_to_waypoint_far = np.arctan2(
+            vector_to_waypoint_far[1],
+            vector_to_waypoint_far[0]
+        )
+
+        delta_heading_far = normalize_rad(
+            heading_to_waypoint_far - vehicle_rotation[2]
+        )
+        self.delta_heading_far = delta_heading_far
+
+        if abs(delta_heading_far) > 0.35:
+            target_speed = min(target_speed, low_speed_threshold)
+        elif abs(delta_heading_far) > 0.04:
+            target_speed = min(target_speed, middle_speed_threshold)
+
+        if target_speed <= low_speed_threshold:
+            self.speed_mode = "low"
+        elif target_speed <= middle_speed_threshold:
+            self.speed_mode = "middle"
+        else:
+            self.speed_mode = "high"
+
+
+        is_straight = (abs(delta_heading_close) < 0.015) and (abs(delta_heading_far) < 0.04)
+     
+        if is_straight:
+            self.straight_ticks += 1
+        else:
+            self.straight_ticks = 0
+        if self.straight_ticks >= 50:
+            target_speed = 40   # confirmed long straight
+            self.speed_mode = "special-high"
+       
+
+        throttle_control = 0.15 * (target_speed - vehicle_velocity_norm)
 
         control = {
             "throttle": np.clip(throttle_control, 0.0, 1.0),
