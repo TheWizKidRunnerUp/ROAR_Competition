@@ -100,8 +100,19 @@ class RoarCompetitionSolution:
         self.delta_heading = delta_heading
 
         # Proportional controller to steer the vehicle towards the target waypoint
+
+        if abs(delta_heading) > 0.10:
+            steering_gain = 22.0      # sharp corner
+        elif abs(delta_heading) > 0.05:
+            steering_gain = 19.0      # moderate corner
+        else:
+            steering_gain = 16.0      # normal driving
+        self.steering_gain = steering_gain
+
+
+
         steer_control = (
-            -16.0 / np.sqrt(vehicle_velocity_norm) * delta_heading / np.pi
+            -steering_gain / np.sqrt(vehicle_velocity_norm) * delta_heading / np.pi
         ) if vehicle_velocity_norm > 1e-2 else -np.sign(delta_heading)
         steer_control = np.clip(steer_control, -1.0, 1.0)
 
@@ -112,7 +123,7 @@ class RoarCompetitionSolution:
         i = self.current_waypoint_idx
         segment = 30 
 
-        s_start = 40  # begin checking roughly 80 m ahead
+        s_start = 50  # begin checking roughly 80 m ahead
 
         p0 = waypoints[(i + s_start) % n].location[:2]
         p1 = waypoints[(i + s_start + segment) % n].location[:2]
@@ -199,7 +210,7 @@ class RoarCompetitionSolution:
             self.s_turn_ticks -= 1
 
         if self.s_turn_ticks > 0:
-            target_speed = min(target_speed, 40)
+            target_speed = min(target_speed, 45)
        
 
         throttle_control = 0.05 * (target_speed - vehicle_velocity_norm)
