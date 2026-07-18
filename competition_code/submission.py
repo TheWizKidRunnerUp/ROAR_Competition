@@ -112,10 +112,12 @@ class RoarCompetitionSolution:
         i = self.current_waypoint_idx
         segment = 30 
 
-        p0 = waypoints[i % n].location[:2]
-        p1 = waypoints[(i + segment) % n].location[:2]
-        p2 = waypoints[(i + 2 * segment) % n].location[:2]
-        p3 = waypoints[(i + 3 * segment) % n].location[:2]
+        s_start = 40  # begin checking roughly 80 m ahead
+
+        p0 = waypoints[(i + s_start) % n].location[:2]
+        p1 = waypoints[(i + s_start + segment) % n].location[:2]
+        p2 = waypoints[(i + s_start + 2 * segment) % n].location[:2]
+        p3 = waypoints[(i + s_start + 3 * segment) % n].location[:2]
 
         heading1 = np.arctan2(p1[1] - p0[1], p1[0] - p0[0])
         heading2 = np.arctan2(p2[1] - p1[1], p2[0] - p1[0])
@@ -125,9 +127,9 @@ class RoarCompetitionSolution:
         turn2 = normalize_rad(heading3 - heading2)
 
         is_s_turn = (
-            turn1 * turn2 < 0            
-            and abs(turn1) > 0.10
-            and abs(turn2) > 0.10
+            turn1 * turn2 < 0
+            and abs(turn1) > 0.08
+            and abs(turn2) > 0.08
         )
 
 
@@ -141,8 +143,8 @@ class RoarCompetitionSolution:
         delta_heading_close = normalize_rad(heading_to_waypoint_close - vehicle_rotation[2])
         self.delta_heading_close = delta_heading_close
 
-        high_speed_threshold = 120
-        middle_speed_threshold = 70
+        high_speed_threshold = 140
+        middle_speed_threshold = 80
         low_speed_threshold = 45
         if abs(delta_heading_close) > 0.08:
             target_speed = low_speed_threshold
