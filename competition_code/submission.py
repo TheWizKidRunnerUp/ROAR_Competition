@@ -92,8 +92,8 @@ class RoarCompetitionSolution:
          # We use the 3rd waypoint ahead of the current waypoint as the target waypoint
         lookahead_distance = int(3+vehicle_velocity_norm*0.35)
         if self.s_turn_ticks > 0 and self.slow_s_turn_active:
-            lookahead_distance = min(lookahead_distance, 12)
-            
+            #lookahead_distance = min(lookahead_distance, 12)
+            lookahead_distance = lookahead_distance
         self.lookahead_distance = lookahead_distance
         waypoint_to_follow = self.maneuverable_waypoints[(self.current_waypoint_idx + lookahead_distance) % len(self.maneuverable_waypoints)]
 
@@ -212,7 +212,7 @@ class RoarCompetitionSolution:
         if self.s_turn_ticks > 0 and self.slow_s_turn_active:
             target_speed = min(target_speed, 45)
         elif self.s_turn_ticks > 0:
-            target_speed = min(target_speed, 50)
+            target_speed = min(target_speed, 52)
 
        
 
@@ -221,13 +221,13 @@ class RoarCompetitionSolution:
         near_turn = abs(delta_heading)
         far_turn = abs(delta_heading_far)
         if self.s_turn_ticks > 0:
-            steering_gain = 20.0
-        elif near_turn > 0.08 or far_turn > 0.4:
+            steering_gain = 32.0
+        elif far_turn > 0.4:
+            steering_gain = 25.0
+        elif far_turn > 0.06:
             steering_gain = 22.0
-        elif near_turn > 0.025 or far_turn > 0.06:
-            steering_gain = 19.0
         else:
-            steering_gain = 17.0    # normal driving
+            steering_gain = 19.0    # normal driving
         self.steering_gain = steering_gain
 
 
