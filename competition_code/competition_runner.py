@@ -212,7 +212,7 @@ async def evaluate_solution(
 
         await solution.step()
         vehicle_speed = np.linalg.norm(velocity_sensor.get_last_gym_observation())
-        print(f"speed={vehicle_speed:6.2f} m/s | mode={solution.speed_mode:12} | gain={solution.steering_gain:4.1f} | reach waypoints {rule.furthest_waypoints_index} at {rule.waypoints[rule.furthest_waypoints_index].location}")
+        print(f"speed={vehicle_speed:6.2f} m/s | mode={solution.speed_mode:12} | gain={solution.steering_gain:4.1f} | target={solution.target_speed:5.1f} m/s | is_slow_s_turn={solution.slow_s_turn_active} | reach waypoints {rule.furthest_waypoints_index}")
         await world.step()
     
     print("end of the loop")

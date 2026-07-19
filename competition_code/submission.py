@@ -61,6 +61,7 @@ class RoarCompetitionSolution:
         self.straight_ticks = 0
         self.straight_ticks = 0
         self.s_turn_ticks = 0
+        self.slow_s_turn_active = False
 
 
     async def step(
@@ -89,6 +90,8 @@ class RoarCompetitionSolution:
         )
          # We use the 3rd waypoint ahead of the current waypoint as the target waypoint
         lookahead_distance = int(3+vehicle_velocity_norm*0.3)
+        if self.s_turn_ticks > 0 and self.slow_s_turn_active:
+            lookahead_distance = min(lookahead_distance, 8)
         waypoint_to_follow = self.maneuverable_waypoints[(self.current_waypoint_idx + lookahead_distance) % len(self.maneuverable_waypoints)]
 
         # Calculate delta vector towards the target waypoint
@@ -101,20 +104,7 @@ class RoarCompetitionSolution:
 
         # Proportional controller to steer the vehicle towards the target waypoint
 
-        if abs(delta_heading) > 0.10:
-            steering_gain = 22.0      # sharp corner
-        elif abs(delta_heading) > 0.05:
-            steering_gain = 19.0      # moderate corner
-        else:
-            steering_gain = 16.0      # normal driving
-        self.steering_gain = steering_gain
-
-
-
-        steer_control = (
-            -steering_gain / np.sqrt(vehicle_velocity_norm) * delta_heading / np.pi
-        ) if vehicle_velocity_norm > 1e-2 else -np.sign(delta_heading)
-        steer_control = np.clip(steer_control, -1.0, 1.0)
+        
 
        
 
@@ -123,7 +113,7 @@ class RoarCompetitionSolution:
         i = self.current_waypoint_idx
         segment = 30 
 
-        s_start = 50  # begin checking roughly 80 m ahead
+        s_start = 60  # begin checking roughly 80 m ahead
 
         p0 = waypoints[(i + s_start) % n].location[:2]
         p1 = waypoints[(i + s_start + segment) % n].location[:2]
@@ -139,8 +129,9 @@ class RoarCompetitionSolution:
 
         is_s_turn = (
             turn1 * turn2 < 0
-            and abs(turn1) > 0.08
-            and abs(turn2) > 0.08
+            and abs(turn1) > 0.12
+            and abs(turn2) > 0.12
+            and (abs(turn1) + abs(turn2)) > 0.35
         )
 
 
@@ -154,8 +145,8 @@ class RoarCompetitionSolution:
         delta_heading_close = normalize_rad(heading_to_waypoint_close - vehicle_rotation[2])
         self.delta_heading_close = delta_heading_close
 
-        high_speed_threshold = 150
-        middle_speed_threshold = 100
+        high_speed_threshold = 190
+        middle_speed_threshold = 190
         low_speed_threshold = 55
         if abs(delta_heading_close) > 0.08:
             target_speed = low_speed_threshold
@@ -193,7 +184,10 @@ class RoarCompetitionSolution:
 
 
         if self.s_turn_ticks > 0:
+            
             self.speed_mode = "special-med"
+        elif self.slow_s_turn_active == True:
+            self.speed_mode = "slow-med"
         elif target_speed <= low_speed_threshold:
             self.speed_mode = "low"
         elif target_speed <= middle_speed_threshold:
@@ -201,24 +195,58 @@ class RoarCompetitionSolution:
         else:
             self.speed_mode = "high"
 
-
         
-     
+        if is_s_turn and self.s_turn_ticks == 0:
+            self.slow_s_turn_active = vehicle_velocity_norm >= 71.0
+
         if is_s_turn:
             self.s_turn_ticks = 80
         elif self.s_turn_ticks > 0:
             self.s_turn_ticks -= 1
+            if self.s_turn_ticks == 0:
+                self.slow_s_turn_active = False
 
-        if self.s_turn_ticks > 0:
-            target_speed = min(target_speed, 45)
+        if self.s_turn_ticks > 0 and self.slow_s_turn_active:
+            target_speed = min(target_speed, 40)
+        elif self.s_turn_ticks > 0:
+            target_speed = min(target_speed, 50)
+
        
 
-        throttle_control = 0.05 * (target_speed - vehicle_velocity_norm)
+        
+
+        near_turn = abs(delta_heading)
+        far_turn = abs(delta_heading_far)
+        if self.s_turn_ticks > 0:
+            steering_gain = 20.0
+        elif near_turn > 0.08 or far_turn > 0.4:
+            steering_gain = 22.0
+        elif near_turn > 0.025 or far_turn > 0.06:
+            steering_gain = 19.0
+        else:
+            steering_gain = 17.0    # normal driving
+        self.steering_gain = steering_gain
+
+
+
+        steer_control = (
+            -steering_gain / np.sqrt(vehicle_velocity_norm) * delta_heading / np.pi
+        ) if vehicle_velocity_norm > 1e-2 else -np.sign(delta_heading)
+        steer_control = np.clip(steer_control, -1.0, 1.0)
+
+
+        self.target_speed = target_speed
+
+        speed_control = 0.05 * (target_speed - vehicle_velocity_norm)
+        throttle_control = np.clip(speed_control, 0.0, 1.0)
+        brake_control = np.clip(-speed_control, 0.0, 1.0)
+
+
 
         control = {
-            "throttle": np.clip(throttle_control, 0.0, 1.0),
+            "throttle": throttle_control,
             "steer": steer_control,
-            "brake": np.clip(-throttle_control, 0.0, 1.0),
+            "brake": brake_control,
             "hand_brake": 0.0,
             "reverse": 0,
             "target_gear": 0
