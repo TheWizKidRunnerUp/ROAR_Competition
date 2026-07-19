@@ -62,6 +62,7 @@ class RoarCompetitionSolution:
         self.straight_ticks = 0
         self.s_turn_ticks = 0
         self.slow_s_turn_active = False
+        self.lookahead_distance = 0
 
 
     async def step(
@@ -89,9 +90,11 @@ class RoarCompetitionSolution:
             self.maneuverable_waypoints
         )
          # We use the 3rd waypoint ahead of the current waypoint as the target waypoint
-        lookahead_distance = int(3+vehicle_velocity_norm*0.3)
+        lookahead_distance = int(3+vehicle_velocity_norm*0.35)
         if self.s_turn_ticks > 0 and self.slow_s_turn_active:
-            lookahead_distance = min(lookahead_distance, 8)
+            lookahead_distance = min(lookahead_distance, 12)
+            
+        self.lookahead_distance = lookahead_distance
         waypoint_to_follow = self.maneuverable_waypoints[(self.current_waypoint_idx + lookahead_distance) % len(self.maneuverable_waypoints)]
 
         # Calculate delta vector towards the target waypoint
@@ -147,7 +150,7 @@ class RoarCompetitionSolution:
 
         high_speed_threshold = 190
         middle_speed_threshold = 190
-        low_speed_threshold = 55
+        low_speed_threshold = 60
         if abs(delta_heading_close) > 0.08:
             target_speed = low_speed_threshold
         elif abs(delta_heading_close) > 0.025:
@@ -207,7 +210,7 @@ class RoarCompetitionSolution:
                 self.slow_s_turn_active = False
 
         if self.s_turn_ticks > 0 and self.slow_s_turn_active:
-            target_speed = min(target_speed, 40)
+            target_speed = min(target_speed, 45)
         elif self.s_turn_ticks > 0:
             target_speed = min(target_speed, 50)
 
